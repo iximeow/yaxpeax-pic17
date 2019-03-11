@@ -10,6 +10,7 @@ pub struct Instruction {
     pub operands: [Operand; 2]
 }
 
+#[derive(Debug)]
 pub struct PIC17;
 impl Arch for PIC17 {
     type Address = u16;
@@ -38,6 +39,9 @@ impl Display for Instruction {
 
 impl LengthedInstruction for Instruction {
     type Unit = <PIC17 as Arch>::Address;
+    fn min_size() -> Self::Unit {
+        2
+    }
     fn len(&self) -> Self::Unit {
         match self.opcode {
             _ => 2
@@ -259,24 +263,24 @@ impl Display for Operand {
 }
 
 impl Decodable for Instruction {
-    fn decode<'a, T: IntoIterator<Item=&'a u8>>(bytes: T) -> Option<Self> {
+    fn decode<T: IntoIterator<Item=u8>>(bytes: T) -> Option<Self> {
         let mut blank = Instruction::blank();
         match blank.decode_into(bytes) {
             Some(_) => Some(blank),
             None => None
         }
     }
-    fn decode_into<'a, T: IntoIterator<Item=&'a u8>>(&mut self, bytes: T) -> Option<()> {
+    fn decode_into<T: IntoIterator<Item=u8>>(&mut self, bytes: T) -> Option<()> {
         let mut bytes_iter = bytes.into_iter();
-        let word: Vec<&'a u8> = bytes_iter.by_ref().take(2).collect();
+        let word: Vec<u8> = bytes_iter.by_ref().take(2).collect();
         if word.len() != 2 {
             return None;
         }
 
-        match *word[1] {
+        match word[1] {
             0x00 => {
                 self.operands = [Operand::Nothing, Operand::Nothing];
-                match *word[0] {
+                match word[0] {
                     0x00 => {
                         self.opcode = Opcode::NOP;
                         Some(())
@@ -298,14 +302,14 @@ impl Decodable for Instruction {
                         Some(())
                     },
                     _ => {
-                        self.opcode = Opcode::Invalid(*word[1], *word[0]);
+                        self.opcode = Opcode::Invalid(word[1], word[0]);
                         None
                     }
                 }
             },
             0x01 => {
                 self.opcode = Opcode::MOVWF;
-                self.operands = [Operand::File(*word[0]), Operand::Nothing];
+                self.operands = [Operand::File(word[0]), Operand::Nothing];
                 Some(())
             },
             x if x < 0x30 => {
@@ -336,25 +340,25 @@ impl Decodable for Instruction {
                     Opcode::NEGW,
                     Opcode::DAW
                 ][(x >> 1) as usize - 1];
-                self.operands[0] = Operand::File(*word[0]);
+                self.operands[0] = Operand::File(word[0]);
                 self.operands[1] = if d {
-                    Operand::File(*word[0])
+                    Operand::File(word[0])
                 } else {
                     Operand::W
                 };
                 Some(())
             },
             x if x < 0x40 => {
-                self.operands = [Operand::File(*word[0]), Operand::Nothing];
-                self.opcode = match *word[1] {
+                self.operands = [Operand::File(word[0]), Operand::Nothing];
+                self.opcode = match word[1] {
                     0x30 => Opcode::CPFSLT,
                     0x31 => Opcode::CPFSEQ,
                     0x32 => Opcode::CPFSGT,
                     0x33 => Opcode::MULWF,
                     0x34 => Opcode::TSTFSZ,
-                    0x35 => { Opcode::Invalid(*word[1], *word[0]); return None },
-                    0x36 => { Opcode::Invalid(*word[1], *word[0]); return None },
-                    0x37 => { Opcode::Invalid(*word[1], *word[0]); return None },
+                    0x35 => { Opcode::Invalid(word[1], word[0]); return None },
+                    0x36 => { Opcode::Invalid(word[1], word[0]); return None },
+                    0x37 => { Opcode::Invalid(word[1], word[0]); return None },
                     0x38 => { self.operands[1] = Operand::ImmediateU8(0); Opcode::BTG },
                     0x39 => { self.operands[1] = Operand::ImmediateU8(1); Opcode::BTG },
                     0x3a => { self.operands[1] = Operand::ImmediateU8(2); Opcode::BTG },
@@ -369,14 +373,14 @@ impl Decodable for Instruction {
             },
             x if x < 0x60 => {
                 self.opcode = Opcode::MOVPF;
-                self.operands[0] = Operand::File((*word[1]) & 0x1f);
-                self.operands[1] = Operand::File(*word[0]);
+                self.operands[0] = Operand::File((word[1]) & 0x1f);
+                self.operands[1] = Operand::File(word[0]);
                 Some(())
             },
             x if x < 0x80 => {
                 self.opcode = Opcode::MOVFP;
-                self.operands[0] = Operand::File(*word[0]);
-                self.operands[1] = Operand::File((*word[1]) & 0x1f);
+                self.operands[0] = Operand::File(word[0]);
+                self.operands[1] = Operand::File((word[1]) & 0x1f);
                 Some(())
             },
             x if x < 0xa0 => {
@@ -385,9 +389,9 @@ impl Decodable for Instruction {
                     Opcode::BCF,
                     Opcode::BTFSS,
                     Opcode::BTFSC,
-                ][(((*word[1]) >> 3) & 0x3) as usize];
-                self.operands[0] = Operand::File(*word[0]);
-                self.operands[1] = Operand::ImmediateU8((*word[1]) & 0x7);
+                ][(((word[1]) >> 3) & 0x3) as usize];
+                self.operands[0] = Operand::File(word[0]);
+                self.operands[1] = Operand::ImmediateU8((word[1]) & 0x7);
                 Some(())
             },
             x if x < 0xb0 => {
@@ -409,7 +413,7 @@ impl Decodable for Instruction {
                     Opcode::TABLWTH,
                     Opcode::TABLWTHI
                 ][(x & 0x0f) as usize];
-                self.operands = [Operand::File(*word[0]), Operand::Nothing];
+                self.operands = [Operand::File(word[0]), Operand::Nothing];
                 Some(())
             },
             x if x < 0xc0 => {
@@ -423,25 +427,25 @@ impl Decodable for Instruction {
                     Opcode::RETLW,
                     Opcode::LCALL,
                     Opcode::MOVLB, // BSR only gets low four...
-                    Opcode::Invalid(*word[1], *word[0]),
+                    Opcode::Invalid(word[1], word[0]),
                     Opcode::MOVLR, // These are weird ones. The Bank Select
                     Opcode::MOVLR, // Register only gets the high four bits.
                     Opcode::MULLW,
-                    Opcode::Invalid(*word[1], *word[0]),
-                    Opcode::Invalid(*word[1], *word[0]),
-                    Opcode::Invalid(*word[1], *word[0])
-                ][((*word[1]) & 0x0f) as usize];
-                self.operands = [Operand::ImmediateU8(*word[0]), Operand::Nothing];
+                    Opcode::Invalid(word[1], word[0]),
+                    Opcode::Invalid(word[1], word[0]),
+                    Opcode::Invalid(word[1], word[0])
+                ][((word[1]) & 0x0f) as usize];
+                self.operands = [Operand::ImmediateU8(word[0]), Operand::Nothing];
                 Some(())
             },
             x if x < 0xe0 => {
                 self.opcode = Opcode::GOTO;
-                self.operands = [Operand::ImmediateU32(*word[0] as u32 | (((*word[1] as u32) & 0x1f) << 8)), Operand::Nothing];
+                self.operands = [Operand::ImmediateU32(word[0] as u32 | (((word[1] as u32) & 0x1f) << 8)), Operand::Nothing];
                 Some(())
             },
             _ => {
                 self.opcode = Opcode::CALL;
-                self.operands = [Operand::ImmediateU32(*word[0] as u32 | (((*word[1] as u32) & 0x1f) << 8)), Operand::Nothing];
+                self.operands = [Operand::ImmediateU32(word[0] as u32 | (((word[1] as u32) & 0x1f) << 8)), Operand::Nothing];
                 Some(())
             }
         }
