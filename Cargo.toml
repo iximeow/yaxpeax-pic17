@@ -11,6 +11,7 @@ A rust pic17 decoder
 
 [dependencies]
 yaxpeax-arch = { path = "../../yaxpeax-arch" }
+"termion" = "1.4.0"
 
 [[test]]
 name = "test"

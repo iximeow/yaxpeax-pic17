@@ -1,8 +1,11 @@
 extern crate yaxpeax_arch;
+extern crate termion;
 
-use yaxpeax_arch::{Arch, Decodable, LengthedInstruction};
+use yaxpeax_arch::{Arch, ColorSettings, Colorize, Decodable, LengthedInstruction, ShowContextual};
 
 use std::fmt::{Display, Formatter};
+
+use termion::color;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Instruction {
@@ -452,3 +455,173 @@ impl Decodable for Instruction {
     }
 }
 
+pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static color::Color> {
+    match opcode {
+        Opcode::Invalid(_, _) => &color::Fg(&color::Red),
+        Opcode::NOP => &color::Fg(&color::Blue),
+        Opcode::CPFSLT |
+        Opcode::CPFSEQ |
+        Opcode::CPFSGT |
+        Opcode::TSTFSZ |
+        Opcode::BTFSS |
+        Opcode::BTFSC |
+        Opcode::RETLW |
+        Opcode::LCALL |
+        Opcode::GOTO |
+        Opcode::CALL |
+        Opcode::RETURN => &color::Fg(&color::Green),
+        Opcode::SLEEP |
+        Opcode::CLRWDT |
+        Opcode::RETFIE => &color::Fg(&color::Cyan),
+        Opcode::MOVWF |
+        Opcode::MOVFP |
+        Opcode::MOVPF |
+        Opcode::MOVLW |
+        Opcode::MOVLB |
+        Opcode::MOVLR => &color::Fg(&color::LightMagenta),
+        Opcode::BSF |
+        Opcode::BCF |
+        Opcode::IORWF |
+        Opcode::ANDWF |
+        Opcode::XORWF |
+        Opcode::IORLW |
+        Opcode::XORLW |
+        Opcode::ANDLW |
+        Opcode::CLRF |
+        Opcode::SETF |
+        Opcode::BTG |
+        Opcode::COMF |
+        Opcode::RRCF |
+        Opcode::RLCF |
+        Opcode::RRNCF |
+        Opcode::RLNCF |
+        Opcode::SWAPF => &color::Fg(&color::LightYellow),
+
+        Opcode::INFSNZ |
+        Opcode::DCFSNZ |
+        Opcode::DECFSZ |
+        Opcode::INCFSZ |
+        Opcode::SUBWFB |
+        Opcode::SUBWF |
+        Opcode::DECF |
+        Opcode::ADDWF |
+        Opcode::ADDWFC |
+        Opcode::INCF |
+        Opcode::MULWF |
+        Opcode::NEGW |
+        Opcode::DAW |
+        Opcode::ADDLW |
+        Opcode::SUBLW |
+        Opcode::MULLW => &color::Fg(&color::Yellow),
+
+        Opcode::TLRDL |
+        Opcode::TLRDH |
+        Opcode::TLWTL |
+        Opcode::TLWTH |
+        Opcode::TABLRDL |
+        Opcode::TABLRDLI |
+        Opcode::TABLRDH |
+        Opcode::TABLRDHI |
+        Opcode::TABLWTL |
+        Opcode::TABLWTLI |
+        Opcode::TABLWTH |
+        Opcode::TABLWTHI => &color::Fg(&color::Magenta),
+    }
+}
+
+impl <T: std::fmt::Write> Colorize<T> for Operand {
+    fn colorize(&self, colors: Option<&ColorSettings>, out: &mut T) -> std::fmt::Result {
+        match self {
+            Operand::ImmediateU8(i) => {
+                write!(out, "#{:02x}", i)
+            },
+            Operand::ImmediateU32(i) => {
+                write!(out, "#{:08x}", i)
+            },
+            Operand::File(f) => {
+                if *f < 0x10 {
+                    write!(out, "{}0x{:02x}{}", color::Fg(color::Yellow), f, color::Fg(color::Reset))
+                } else {
+                    write!(out, "{}[banked 0x{:02x}]{}", color::Fg(color::Yellow), f, color::Fg(color::Reset))
+                }
+            },
+            Operand::W => {
+                write!(out, "{}W{}", color::Fg(color::Yellow), color::Fg(color::Reset))
+            },
+            _ => {
+                Ok(())
+            }
+        }
+    }
+}
+
+impl <T: std::fmt::Write> ShowContextual<<PIC17 as Arch>::Address, [Option<String>], T> for Instruction {
+    fn contextualize(&self, colors: Option<&ColorSettings>, address: <PIC17 as Arch>::Address, context: Option<&[Option<String>]>, out: &mut T) -> std::fmt::Result {
+        write!(out, "{}{}{}", opcode_color(self.opcode), self.opcode, color::Fg(color::Reset))?;
+
+        match self.opcode {
+            Opcode::LCALL => {
+                write!(out, " ")?;
+                match context.and_then(|c| c.get(0)) {
+                    Some(Some(text)) => {
+                        write!(out, "{}", text)
+                    },
+                    _ => {
+                        match self.operands[0] {
+                            Operand::ImmediateU8(i) => {
+                                write!(out, "+#{:08x}", (i as u16) * 2)
+                            }
+                            _ => { unreachable!(); }
+                        }
+                    }
+                }
+            },
+            Opcode::CALL |
+            Opcode::GOTO => {
+                match context.and_then(|c| c.get(0)) {
+                    Some(Some(text)) => { write!(out, "{}", text) }
+                    _ => {
+                        match self.operands[0] {
+                            Operand::ImmediateU32(i) => {
+                                write!(out, " #{:08x}", (i as u16) * 2)
+                            },
+                            _ => { unreachable!() }
+                        }
+                    }
+                }
+            },
+            _ => {
+                match context.and_then(|c| c.get(0)) {
+                    Some(Some(text)) => { write!(out, " {}", text)?; },
+                    _ => {
+                        match &self.operands[0] {
+                            Operand::Nothing => {
+                                return Ok(());
+                            },
+                            x @ _ => {
+                                write!(out, " ")?;
+                                x.colorize(colors, out)?;
+                            }
+                        };
+                    }
+                };
+
+                match context.and_then(|c| c.get(1)) {
+                    Some(Some(text)) => { write!(out, ", {}", text)?; },
+                    _ => {
+                        match &self.operands[1] {
+                            Operand::Nothing => {
+                                return Ok(());
+                            },
+                            x @ _ => {
+                                write!(out, ", ")?;
+                                x.colorize(colors, out)?;
+                            }
+                        };
+                    }
+                };
+                Ok(())
+            }
+        }
+    }
+}
