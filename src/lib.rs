@@ -1,3 +1,10 @@
+#[cfg(feature="use-serde")]
+#[macro_use] extern crate serde_derive;
+#[cfg(feature="use-serde")]
+extern crate serde;
+#[cfg(feature="use-serde")]
+use serde::{Serialize, Deserialize};
+
 extern crate yaxpeax_arch;
 extern crate termion;
 
@@ -13,8 +20,14 @@ pub struct Instruction {
     pub operands: [Operand; 2]
 }
 
+#[cfg(feature="use-serde")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PIC17;
+
+#[cfg(not(feature="use-serde"))]
 #[derive(Debug)]
 pub struct PIC17;
+
 impl Arch for PIC17 {
     type Address = u16;
     type Instruction = Instruction;
