@@ -2,8 +2,8 @@
 #[macro_use] extern crate serde_derive;
 #[cfg(feature="use-serde")]
 extern crate serde;
-#[cfg(feature="use-serde")]
-use serde::{Serialize, Deserialize};
+//#[cfg(feature="use-serde")]
+//use serde::{Serialize, Deserialize};
 
 extern crate yaxpeax_arch;
 extern crate termion;
@@ -468,7 +468,7 @@ impl Decodable for Instruction {
     }
 }
 
-pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static color::Color> {
+pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static dyn color::Color> {
     match opcode {
         Opcode::Invalid(_, _) => &color::Fg(&color::Red),
         Opcode::NOP => &color::Fg(&color::Blue),
@@ -543,7 +543,7 @@ pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static color::Color>
 }
 
 impl <T: std::fmt::Write> Colorize<T> for Operand {
-    fn colorize(&self, colors: Option<&ColorSettings>, out: &mut T) -> std::fmt::Result {
+    fn colorize(&self, _colors: Option<&ColorSettings>, out: &mut T) -> std::fmt::Result {
         match self {
             Operand::ImmediateU8(i) => {
                 write!(out, "#{:02x}", i)
@@ -569,7 +569,7 @@ impl <T: std::fmt::Write> Colorize<T> for Operand {
 }
 
 impl <T: std::fmt::Write> ShowContextual<<PIC17 as Arch>::Address, [Option<String>], T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, address: <PIC17 as Arch>::Address, context: Option<&[Option<String>]>, out: &mut T) -> std::fmt::Result {
+    fn contextualize(&self, colors: Option<&ColorSettings>, _address: <PIC17 as Arch>::Address, context: Option<&[Option<String>]>, out: &mut T) -> std::fmt::Result {
         write!(out, "{}{}{}", opcode_color(self.opcode), self.opcode, color::Fg(color::Reset))?;
 
         match self.opcode {
