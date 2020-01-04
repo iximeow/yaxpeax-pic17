@@ -10,7 +10,7 @@ extern crate termion;
 
 use yaxpeax_arch::{Arch, ColorSettings, Colorize, Decoder, LengthedInstruction, ShowContextual};
 
-use std::fmt::{Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 
 use termion::color;
 
@@ -31,6 +31,7 @@ pub struct PIC17;
 impl Arch for PIC17 {
     type Address = u16;
     type Instruction = Instruction;
+    type DecodeError = DecodeError;
     type Decoder = InstDecoder;
     type Operand = Operand;
 }
@@ -64,6 +65,34 @@ impl LengthedInstruction for Instruction {
             _ => 2
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum DecodeError {
+    ExhaustedInput,
+    InvalidOpcode,
+    InvalidOperand,
+}
+
+impl fmt::Display for DecodeError {
+    fn fmt(&self, f:  &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DecodeError::ExhaustedInput => write!(f, "exhausted input"),
+            DecodeError::InvalidOpcode => write!(f, "invalid opcode"),
+            DecodeError::InvalidOperand => write!(f, "invalid operand"),
+        }
+    }
+}
+
+impl yaxpeax_arch::DecodeError for DecodeError {
+    fn data_exhausted(&self) -> bool { self == &DecodeError::ExhaustedInput }
+    fn bad_opcode(&self) -> bool { self == &DecodeError::InvalidOpcode }
+    fn bad_operand(&self) -> bool { self == &DecodeError::InvalidOperand }
+}
+
+impl yaxpeax_arch::Instruction for Instruction {
+    // TODO: this is wrong!!
+    fn well_defined(&self) -> bool { true }
 }
 
 impl Instruction {
@@ -283,18 +312,17 @@ impl Display for Operand {
 pub struct InstDecoder {}
 
 impl Decoder<Instruction> for InstDecoder {
-    fn decode<T: IntoIterator<Item=u8>>(&self, bytes: T) -> Option<Instruction> {
+    type Error = DecodeError;
+
+    fn decode<T: IntoIterator<Item=u8>>(&self, bytes: T) -> Result<Instruction, DecodeError> {
         let mut blank = Instruction::blank();
-        match self.decode_into(&mut blank, bytes) {
-            Some(_) => Some(blank),
-            None => None
-        }
+        self.decode_into(&mut blank, bytes).map(|_: ()| blank)
     }
-    fn decode_into<T: IntoIterator<Item=u8>>(&self, inst: &mut Instruction, bytes: T) -> Option<()> {
+    fn decode_into<T: IntoIterator<Item=u8>>(&self, inst: &mut Instruction, bytes: T) -> Result<(), DecodeError> {
         let mut bytes_iter = bytes.into_iter();
         let word: Vec<u8> = bytes_iter.by_ref().take(2).collect();
         if word.len() != 2 {
-            return None;
+            return Err(DecodeError::ExhaustedInput);
         }
 
         match word[1] {
@@ -303,34 +331,34 @@ impl Decoder<Instruction> for InstDecoder {
                 match word[0] {
                     0x00 => {
                         inst.opcode = Opcode::NOP;
-                        Some(())
+                        Ok(())
                     },
                     0b00000010 => {
                         inst.opcode = Opcode::RETURN;
-                        Some(())
+                        Ok(())
                     },
                     0b00000011 => {
                         inst.opcode = Opcode::SLEEP;
-                        Some(())
+                        Ok(())
                     },
                     0b00000100 => {
                         inst.opcode = Opcode::CLRWDT;
-                        Some(())
+                        Ok(())
                     },
                     0b00000101 => {
                         inst.opcode = Opcode::RETFIE;
-                        Some(())
+                        Ok(())
                     },
                     _ => {
                         inst.opcode = Opcode::Invalid(word[1], word[0]);
-                        None
+                        Err(DecodeError::InvalidOpcode)
                     }
                 }
             },
             0x01 => {
                 inst.opcode = Opcode::MOVWF;
                 inst.operands = [Operand::File(word[0]), Operand::Nothing];
-                Some(())
+                Ok(())
             },
             x if x < 0x30 => {
                 // TODO: consume
@@ -366,7 +394,7 @@ impl Decoder<Instruction> for InstDecoder {
                 } else {
                     Operand::W
                 };
-                Some(())
+                Ok(())
             },
             x if x < 0x40 => {
                 inst.operands = [Operand::File(word[0]), Operand::Nothing];
@@ -376,9 +404,9 @@ impl Decoder<Instruction> for InstDecoder {
                     0x32 => Opcode::CPFSGT,
                     0x33 => Opcode::MULWF,
                     0x34 => Opcode::TSTFSZ,
-                    0x35 => { Opcode::Invalid(word[1], word[0]); return None },
-                    0x36 => { Opcode::Invalid(word[1], word[0]); return None },
-                    0x37 => { Opcode::Invalid(word[1], word[0]); return None },
+                    0x35 => { Opcode::Invalid(word[1], word[0]); return Err(DecodeError::InvalidOpcode) },
+                    0x36 => { Opcode::Invalid(word[1], word[0]); return Err(DecodeError::InvalidOpcode) },
+                    0x37 => { Opcode::Invalid(word[1], word[0]); return Err(DecodeError::InvalidOpcode) },
                     0x38 => { inst.operands[1] = Operand::ImmediateU8(0); Opcode::BTG },
                     0x39 => { inst.operands[1] = Operand::ImmediateU8(1); Opcode::BTG },
                     0x3a => { inst.operands[1] = Operand::ImmediateU8(2); Opcode::BTG },
@@ -389,19 +417,19 @@ impl Decoder<Instruction> for InstDecoder {
                     0x3f => { inst.operands[1] = Operand::ImmediateU8(7); Opcode::BTG },
                     _ => { unreachable!(); }
                 };
-                Some(())
+                Ok(())
             },
             x if x < 0x60 => {
                 inst.opcode = Opcode::MOVPF;
                 inst.operands[0] = Operand::File((word[1]) & 0x1f);
                 inst.operands[1] = Operand::File(word[0]);
-                Some(())
+                Ok(())
             },
             x if x < 0x80 => {
                 inst.opcode = Opcode::MOVFP;
                 inst.operands[0] = Operand::File(word[0]);
                 inst.operands[1] = Operand::File((word[1]) & 0x1f);
-                Some(())
+                Ok(())
             },
             x if x < 0xa0 => {
                 inst.opcode = [
@@ -412,7 +440,7 @@ impl Decoder<Instruction> for InstDecoder {
                 ][(((word[1]) >> 3) & 0x3) as usize];
                 inst.operands[0] = Operand::File(word[0]);
                 inst.operands[1] = Operand::ImmediateU8((word[1]) & 0x7);
-                Some(())
+                Ok(())
             },
             x if x < 0xb0 => {
                 inst.opcode = [
@@ -434,7 +462,7 @@ impl Decoder<Instruction> for InstDecoder {
                     Opcode::TABLWTHI
                 ][(x & 0x0f) as usize];
                 inst.operands = [Operand::File(word[0]), Operand::Nothing];
-                Some(())
+                Ok(())
             },
             x if x < 0xc0 => {
                 inst.opcode = [
@@ -456,17 +484,17 @@ impl Decoder<Instruction> for InstDecoder {
                     Opcode::Invalid(word[1], word[0])
                 ][((word[1]) & 0x0f) as usize];
                 inst.operands = [Operand::ImmediateU8(word[0]), Operand::Nothing];
-                Some(())
+                Ok(())
             },
             x if x < 0xe0 => {
                 inst.opcode = Opcode::GOTO;
                 inst.operands = [Operand::ImmediateU32(word[0] as u32 | (((word[1] as u32) & 0x1f) << 8)), Operand::Nothing];
-                Some(())
+                Ok(())
             },
             _ => {
                 inst.opcode = Opcode::CALL;
                 inst.operands = [Operand::ImmediateU32(word[0] as u32 | (((word[1] as u32) & 0x1f) << 8)), Operand::Nothing];
-                Some(())
+                Ok(())
             }
         }
     }
