@@ -8,7 +8,7 @@ extern crate serde;
 extern crate yaxpeax_arch;
 extern crate termion;
 
-use yaxpeax_arch::{Arch, ColorSettings, Colorize, Decoder, LengthedInstruction, ShowContextual};
+use yaxpeax_arch::{Arch, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -37,7 +37,7 @@ impl Arch for PIC17 {
 }
 
 impl Display for Instruction {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.opcode)?;
         match self.operands[0] {
             Operand::Nothing => return Ok(()),
@@ -95,14 +95,16 @@ impl yaxpeax_arch::Instruction for Instruction {
     fn well_defined(&self) -> bool { true }
 }
 
-impl Instruction {
-    pub fn blank() -> Instruction {
+impl Default for Instruction {
+    fn default() -> Instruction {
         Instruction {
             opcode: Opcode::NOP,
             operands: [Operand::Nothing, Operand::Nothing]
         }
     }
+}
 
+impl Instruction {
     pub fn is_call(&self) -> bool {
         match self.opcode {
             Opcode::CALL | Opcode::LCALL => { true },
@@ -183,7 +185,7 @@ pub enum Opcode {
 }
 
 impl Display for Opcode {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             Opcode::Invalid(a, b) => { write!(f, "invalid({:02x}{:02x})", a, b) },
             Opcode::NOP => { write!(f, "nop") },
@@ -287,7 +289,7 @@ impl Operand {
 }
 
 impl Display for Operand {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
             Operand::ImmediateU8(imm) => {
                 write!(f, "#0x{:x}", imm)
@@ -314,10 +316,6 @@ pub struct InstDecoder {}
 impl Decoder<Instruction> for InstDecoder {
     type Error = DecodeError;
 
-    fn decode<T: IntoIterator<Item=u8>>(&self, bytes: T) -> Result<Instruction, DecodeError> {
-        let mut blank = Instruction::blank();
-        self.decode_into(&mut blank, bytes).map(|_: ()| blank)
-    }
     fn decode_into<T: IntoIterator<Item=u8>>(&self, inst: &mut Instruction, bytes: T) -> Result<(), DecodeError> {
         let mut bytes_iter = bytes.into_iter();
         let word: Vec<u8> = bytes_iter.by_ref().take(2).collect();
@@ -574,8 +572,8 @@ pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static dyn color::Co
     }
 }
 
-impl <T: std::fmt::Write> Colorize<T> for Operand {
-    fn colorize(&self, _colors: Option<&ColorSettings>, out: &mut T) -> std::fmt::Result {
+impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> Colorize<T, C, Y> for Operand {
+    fn colorize(&self, _colors: &Y, out: &mut T) -> fmt::Result {
         match self {
             Operand::ImmediateU8(i) => {
                 write!(out, "#{:02x}", i)
@@ -600,8 +598,8 @@ impl <T: std::fmt::Write> Colorize<T> for Operand {
     }
 }
 
-impl <T: std::fmt::Write> ShowContextual<<PIC17 as Arch>::Address, [Option<String>], T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, _address: <PIC17 as Arch>::Address, context: Option<&[Option<String>]>, out: &mut T) -> std::fmt::Result {
+impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<<PIC17 as Arch>::Address, [Option<String>], C, T, Y> for Instruction {
+    fn contextualize(&self, colors: &Y, _address: <PIC17 as Arch>::Address, context: Option<&[Option<String>]>, out: &mut T) -> fmt::Result {
         write!(out, "{}{}{}", opcode_color(self.opcode), self.opcode, color::Fg(color::Reset))?;
 
         match self.opcode {

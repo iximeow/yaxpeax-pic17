@@ -8,7 +8,7 @@ repository = "http://git.iximeow.net/yaxpeax-pic17/"
 description = "pic17 decoders for the yaxpeax project"
 
 [dependencies]
-yaxpeax-arch = { path = "../../yaxpeax-arch" }
+yaxpeax-arch = { version = "0.0.2", default-features = false, features = [] }
 "termion" = "1.4.0"
 "serde" = "*"
 "serde_derive" = "*"
