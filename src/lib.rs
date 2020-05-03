@@ -8,7 +8,7 @@ extern crate serde;
 extern crate yaxpeax_arch;
 extern crate termion;
 
-use yaxpeax_arch::{Arch, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
+use yaxpeax_arch::{Arch, AddressDiff, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -56,13 +56,13 @@ impl Display for Instruction {
 }
 
 impl LengthedInstruction for Instruction {
-    type Unit = <PIC17 as Arch>::Address;
+    type Unit = AddressDiff<<PIC17 as Arch>::Address>;
     fn min_size() -> Self::Unit {
-        2
+        AddressDiff::from_const(2)
     }
     fn len(&self) -> Self::Unit {
         match self.opcode {
-            _ => 2
+            _ => AddressDiff::from_const(2)
         }
     }
 }
