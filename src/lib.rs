@@ -6,12 +6,14 @@ extern crate serde;
 //use serde::{Serialize, Deserialize};
 
 extern crate yaxpeax_arch;
+#[cfg(feature="colors")]
 extern crate termion;
 
 use yaxpeax_arch::{Arch, AddressDiff, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 
 use std::fmt::{self, Display, Formatter};
 
+#[cfg(feature="colors")]
 use termion::color;
 
 #[derive(Debug, Copy, Clone)]
@@ -498,6 +500,7 @@ impl Decoder<Instruction> for InstDecoder {
     }
 }
 
+#[cfg(feature="colors")]
 pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static dyn color::Color> {
     match opcode {
         Opcode::Invalid(_, _) => &color::Fg(&color::Red),
@@ -581,6 +584,7 @@ impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> Colorize<T, C, Y> for Ope
             Operand::ImmediateU32(i) => {
                 write!(out, "#{:08x}", i)
             },
+            #[cfg(feature="colors")]
             Operand::File(f) => {
                 if *f < 0x10 {
                     write!(out, "{}0x{:02x}{}", color::Fg(color::Yellow), f, color::Fg(color::Reset))
@@ -588,8 +592,21 @@ impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> Colorize<T, C, Y> for Ope
                     write!(out, "{}[banked 0x{:02x}]{}", color::Fg(color::Yellow), f, color::Fg(color::Reset))
                 }
             },
+            #[cfg(not(feature="colors"))]
+            Operand::File(f) => {
+                if *f < 0x10 {
+                    write!(out, "0x{:02x}", f)
+                } else {
+                    write!(out, "[banked 0x{:02x}]", f)
+                }
+            },
+            #[cfg(feature="colors")]
             Operand::W => {
                 write!(out, "{}W{}", color::Fg(color::Yellow), color::Fg(color::Reset))
+            },
+            #[cfg(not(feature="colors"))]
+            Operand::W => {
+                write!(out, "W")
             },
             _ => {
                 Ok(())
@@ -600,7 +617,10 @@ impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> Colorize<T, C, Y> for Ope
 
 impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<<PIC17 as Arch>::Address, [Option<String>], C, T, Y> for Instruction {
     fn contextualize(&self, colors: &Y, _address: <PIC17 as Arch>::Address, context: Option<&[Option<String>]>, out: &mut T) -> fmt::Result {
+        #[cfg(feature="colors")]
         write!(out, "{}{}{}", opcode_color(self.opcode), self.opcode, color::Fg(color::Reset))?;
+        #[cfg(not(feature="colors"))]
+        write!(out, "{}", self.opcode)?;
 
         match self.opcode {
             Opcode::LCALL => {
