@@ -6,13 +6,10 @@ extern crate serde;
 //use serde::{Serialize, Deserialize};
 
 extern crate yaxpeax_arch;
-extern crate termion;
 
 use yaxpeax_arch::{Arch, AddressDiff, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 
 use std::fmt::{self, Display, Formatter};
-
-use termion::color;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Instruction {
@@ -498,82 +495,84 @@ impl Decoder<Instruction> for InstDecoder {
     }
 }
 
-pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static dyn color::Color> {
-    match opcode {
-        Opcode::Invalid(_, _) => &color::Fg(&color::Red),
-        Opcode::NOP => &color::Fg(&color::Blue),
-        Opcode::CPFSLT |
-        Opcode::CPFSEQ |
-        Opcode::CPFSGT |
-        Opcode::TSTFSZ |
-        Opcode::BTFSS |
-        Opcode::BTFSC |
-        Opcode::RETLW |
-        Opcode::LCALL |
-        Opcode::GOTO |
-        Opcode::CALL |
-        Opcode::RETURN => &color::Fg(&color::Green),
-        Opcode::SLEEP |
-        Opcode::CLRWDT |
-        Opcode::RETFIE => &color::Fg(&color::Cyan),
-        Opcode::MOVWF |
-        Opcode::MOVFP |
-        Opcode::MOVPF |
-        Opcode::MOVLW |
-        Opcode::MOVLB |
-        Opcode::MOVLR => &color::Fg(&color::LightMagenta),
-        Opcode::BSF |
-        Opcode::BCF |
-        Opcode::IORWF |
-        Opcode::ANDWF |
-        Opcode::XORWF |
-        Opcode::IORLW |
-        Opcode::XORLW |
-        Opcode::ANDLW |
-        Opcode::CLRF |
-        Opcode::SETF |
-        Opcode::BTG |
-        Opcode::COMF |
-        Opcode::RRCF |
-        Opcode::RLCF |
-        Opcode::RRNCF |
-        Opcode::RLNCF |
-        Opcode::SWAPF => &color::Fg(&color::LightYellow),
+impl <T: fmt::Write, Y: YaxColors> Colorize<T, Y> for Opcode {
+    fn colorize(&self, colors: &Y, out: &mut T) -> fmt::Result {
+        match self {
+            Opcode::Invalid(_, _) => { write!(out, "{}", colors.invalid_op(self)) },
+            Opcode::NOP => { write!(out, "{}", colors.nop_op(self)) },
+            Opcode::CPFSLT |
+            Opcode::CPFSEQ |
+            Opcode::CPFSGT |
+            Opcode::TSTFSZ |
+            Opcode::BTFSS |
+            Opcode::BTFSC |
+            Opcode::RETLW |
+            Opcode::LCALL |
+            Opcode::GOTO |
+            Opcode::CALL |
+            Opcode::RETURN => { write!(out, "{}", colors.control_flow_op(self)) },
+            Opcode::SLEEP |
+            Opcode::CLRWDT |
+            Opcode::RETFIE => { write!(out, "{}", colors.misc_op(self)) },
+            Opcode::MOVWF |
+            Opcode::MOVFP |
+            Opcode::MOVPF |
+            Opcode::MOVLW |
+            Opcode::MOVLB |
+            Opcode::MOVLR => { write!(out, "{}", colors.data_op(self)) }
+            Opcode::BSF |
+            Opcode::BCF |
+            Opcode::IORWF |
+            Opcode::ANDWF |
+            Opcode::XORWF |
+            Opcode::IORLW |
+            Opcode::XORLW |
+            Opcode::ANDLW |
+            Opcode::CLRF |
+            Opcode::SETF |
+            Opcode::BTG |
+            Opcode::COMF |
+            Opcode::RRCF |
+            Opcode::RLCF |
+            Opcode::RRNCF |
+            Opcode::RLNCF |
+            Opcode::SWAPF => { write!(out, "{}", colors.arithmetic_op(self)) },
 
-        Opcode::INFSNZ |
-        Opcode::DCFSNZ |
-        Opcode::DECFSZ |
-        Opcode::INCFSZ |
-        Opcode::SUBWFB |
-        Opcode::SUBWF |
-        Opcode::DECF |
-        Opcode::ADDWF |
-        Opcode::ADDWFC |
-        Opcode::INCF |
-        Opcode::MULWF |
-        Opcode::NEGW |
-        Opcode::DAW |
-        Opcode::ADDLW |
-        Opcode::SUBLW |
-        Opcode::MULLW => &color::Fg(&color::Yellow),
+            Opcode::INFSNZ |
+            Opcode::DCFSNZ |
+            Opcode::DECFSZ |
+            Opcode::INCFSZ |
+            Opcode::SUBWFB |
+            Opcode::SUBWF |
+            Opcode::DECF |
+            Opcode::ADDWF |
+            Opcode::ADDWFC |
+            Opcode::INCF |
+            Opcode::MULWF |
+            Opcode::NEGW |
+            Opcode::DAW |
+            Opcode::ADDLW |
+            Opcode::SUBLW |
+            Opcode::MULLW => { write!(out, "{}", colors.arithmetic_op(self)) },
 
-        Opcode::TLRDL |
-        Opcode::TLRDH |
-        Opcode::TLWTL |
-        Opcode::TLWTH |
-        Opcode::TABLRDL |
-        Opcode::TABLRDLI |
-        Opcode::TABLRDH |
-        Opcode::TABLRDHI |
-        Opcode::TABLWTL |
-        Opcode::TABLWTLI |
-        Opcode::TABLWTH |
-        Opcode::TABLWTHI => &color::Fg(&color::Magenta),
+            Opcode::TLRDL |
+            Opcode::TLRDH |
+            Opcode::TLWTL |
+            Opcode::TLWTH |
+            Opcode::TABLRDL |
+            Opcode::TABLRDLI |
+            Opcode::TABLRDH |
+            Opcode::TABLRDHI |
+            Opcode::TABLWTL |
+            Opcode::TABLWTLI |
+            Opcode::TABLWTH |
+            Opcode::TABLWTHI => { write!(out, "{}", colors.platform_op(self)) },
+        }
     }
 }
 
-impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> Colorize<T, C, Y> for Operand {
-    fn colorize(&self, _colors: &Y, out: &mut T) -> fmt::Result {
+impl <T: fmt::Write, Y: YaxColors> Colorize<T, Y> for Operand {
+    fn colorize(&self, colors: &Y, out: &mut T) -> fmt::Result {
         match self {
             Operand::ImmediateU8(i) => {
                 write!(out, "#{:02x}", i)
@@ -583,13 +582,13 @@ impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> Colorize<T, C, Y> for Ope
             },
             Operand::File(f) => {
                 if *f < 0x10 {
-                    write!(out, "{}0x{:02x}{}", color::Fg(color::Yellow), f, color::Fg(color::Reset))
+                    write!(out, "{}", colors.number(format!("0x{:02x}", f)))
                 } else {
-                    write!(out, "{}[banked 0x{:02x}]{}", color::Fg(color::Yellow), f, color::Fg(color::Reset))
+                    write!(out, "{}", colors.number(format!("[banked 0x{:02x}]", f)))
                 }
             },
             Operand::W => {
-                write!(out, "{}W{}", color::Fg(color::Yellow), color::Fg(color::Reset))
+                write!(out, "{}", colors.register("W"))
             },
             _ => {
                 Ok(())
@@ -598,9 +597,9 @@ impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> Colorize<T, C, Y> for Ope
     }
 }
 
-impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<<PIC17 as Arch>::Address, [Option<String>], C, T, Y> for Instruction {
+impl <T: fmt::Write, Y: YaxColors> ShowContextual<<PIC17 as Arch>::Address, [Option<String>], T, Y> for Instruction {
     fn contextualize(&self, colors: &Y, _address: <PIC17 as Arch>::Address, context: Option<&[Option<String>]>, out: &mut T) -> fmt::Result {
-        write!(out, "{}{}{}", opcode_color(self.opcode), self.opcode, color::Fg(color::Reset))?;
+        self.opcode.colorize(colors, out)?;
 
         match self.opcode {
             Opcode::LCALL => {
