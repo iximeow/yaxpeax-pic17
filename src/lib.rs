@@ -7,7 +7,7 @@ extern crate serde;
 
 extern crate yaxpeax_arch;
 
-use yaxpeax_arch::{Arch, AddressDiff, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
+use yaxpeax_arch::{Arch, AddressDiff, Colorize, Decoder, LengthedInstruction, Reader, StandardDecodeError, ShowContextual, YaxColors};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -17,18 +17,16 @@ pub struct Instruction {
     pub operands: [Operand; 2]
 }
 
-#[cfg(feature="use-serde")]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PIC17;
-
+#[cfg_attr(feature="use-serde", derive(Serialize, Deserialize))]
 #[cfg(not(feature="use-serde"))]
 #[derive(Debug)]
 pub struct PIC17;
 
 impl Arch for PIC17 {
     type Address = u16;
+    type Word = u8;
     type Instruction = Instruction;
-    type DecodeError = DecodeError;
+    type DecodeError = StandardDecodeError;
     type Decoder = InstDecoder;
     type Operand = Operand;
 }
@@ -62,29 +60,6 @@ impl LengthedInstruction for Instruction {
             _ => AddressDiff::from_const(2)
         }
     }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum DecodeError {
-    ExhaustedInput,
-    InvalidOpcode,
-    InvalidOperand,
-}
-
-impl fmt::Display for DecodeError {
-    fn fmt(&self, f:  &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            DecodeError::ExhaustedInput => write!(f, "exhausted input"),
-            DecodeError::InvalidOpcode => write!(f, "invalid opcode"),
-            DecodeError::InvalidOperand => write!(f, "invalid operand"),
-        }
-    }
-}
-
-impl yaxpeax_arch::DecodeError for DecodeError {
-    fn data_exhausted(&self) -> bool { self == &DecodeError::ExhaustedInput }
-    fn bad_opcode(&self) -> bool { self == &DecodeError::InvalidOpcode }
-    fn bad_operand(&self) -> bool { self == &DecodeError::InvalidOperand }
 }
 
 impl yaxpeax_arch::Instruction for Instruction {
@@ -310,15 +285,10 @@ impl Display for Operand {
 #[derive(Default, Debug)]
 pub struct InstDecoder {}
 
-impl Decoder<Instruction> for InstDecoder {
-    type Error = DecodeError;
-
-    fn decode_into<T: IntoIterator<Item=u8>>(&self, inst: &mut Instruction, bytes: T) -> Result<(), DecodeError> {
-        let mut bytes_iter = bytes.into_iter();
-        let word: Vec<u8> = bytes_iter.by_ref().take(2).collect();
-        if word.len() != 2 {
-            return Err(DecodeError::ExhaustedInput);
-        }
+impl Decoder<PIC17> for InstDecoder {
+    fn decode_into<T: Reader<<PIC17 as Arch>::Address, <PIC17 as Arch>::Word>>(&self, inst: &mut Instruction, words: &mut T) -> Result<(), <PIC17 as Arch>::DecodeError> {
+        let mut word = [0u8; 2];
+        words.next_n(&mut word)?;
 
         match word[1] {
             0x00 => {
@@ -346,7 +316,7 @@ impl Decoder<Instruction> for InstDecoder {
                     },
                     _ => {
                         inst.opcode = Opcode::Invalid(word[1], word[0]);
-                        Err(DecodeError::InvalidOpcode)
+                        Err(StandardDecodeError::InvalidOpcode)
                     }
                 }
             },
@@ -399,9 +369,9 @@ impl Decoder<Instruction> for InstDecoder {
                     0x32 => Opcode::CPFSGT,
                     0x33 => Opcode::MULWF,
                     0x34 => Opcode::TSTFSZ,
-                    0x35 => { Opcode::Invalid(word[1], word[0]); return Err(DecodeError::InvalidOpcode) },
-                    0x36 => { Opcode::Invalid(word[1], word[0]); return Err(DecodeError::InvalidOpcode) },
-                    0x37 => { Opcode::Invalid(word[1], word[0]); return Err(DecodeError::InvalidOpcode) },
+                    0x35 => { Opcode::Invalid(word[1], word[0]); return Err(StandardDecodeError::InvalidOpcode) },
+                    0x36 => { Opcode::Invalid(word[1], word[0]); return Err(StandardDecodeError::InvalidOpcode) },
+                    0x37 => { Opcode::Invalid(word[1], word[0]); return Err(StandardDecodeError::InvalidOpcode) },
                     0x38 => { inst.operands[1] = Operand::ImmediateU8(0); Opcode::BTG },
                     0x39 => { inst.operands[1] = Operand::ImmediateU8(1); Opcode::BTG },
                     0x3a => { inst.operands[1] = Operand::ImmediateU8(2); Opcode::BTG },
