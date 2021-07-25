@@ -18,7 +18,6 @@ pub struct Instruction {
 }
 
 #[cfg_attr(feature="use-serde", derive(Serialize, Deserialize))]
-#[cfg(not(feature="use-serde"))]
 #[derive(Debug)]
 pub struct PIC17;
 

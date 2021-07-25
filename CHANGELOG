@@ -1,3 +1,7 @@
+# 0.1.1
+
+fix `struct PIC17` not being exported with `use-serde` enabled
+
 # 0.1.0
 
 update yaxpeax-arch to 0.2.3, fix some API differences
